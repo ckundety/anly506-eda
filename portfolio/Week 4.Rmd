@@ -1,0 +1,164 @@
+---
+title: "Week 4 | Data Import"
+author: "Krishna Chaitanya Kundety"
+date: "June 1, 2019"
+output:
+  html_document:
+    number_sections: false
+book: "R for Data Science"
+book-url: "https://r4ds.had.co.nz/data-import.html"
+---
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(knitr)
+```
+
+## 11.2.2 Exercises
+
+### 1. What function would you use to read a file where fields were separated with "|"?
+
+The `read_delim` function accepts the *delim* argument with a single character. So the function would be `read_delim("a|b|c\n1|2|3", delim = "|")`
+
+### 2. Apart from file, skip, and comment, what other arguments do `read_csv()` and `read_tsv()` have in common?
+
+From `help(read_delim)`, the common arguments are: `col_names, col_types, locale, na, quoted_na, trim_ws, n_max, guess_max, and progress`.
+
+### 3. What are the most important arguments to `read_fwf()`?
+
+According to `help(read_fwf)`, the important arguments are `file` and `col_positions`.
+
+### 4. Sometimes strings in a CSV file contain commas. To prevent them from causing problems they need to be surrounded by a quoting character, like `"` or `'`. By convention, `read_csv()` assumes that the quoting character will be `"`, and if you want to change it you'll need to use `read_delim()` instead. What arguments do you need to specify to read the following text into a data frame?
+
+`"x,y\n1,'a,b'"`
+
+In the above string, assuming:
+* First line is the header and data sarts from second line
+* comma `,` separated fields
+* string class data is enclosed in single quotes `'`
+
+The following code will read the data into a tibble, and then converted into data frame.
+
+```{r}
+tb <- read_delim("x,y\n1,'a,b'", delim = ",",quote = "'")
+df <- data.frame(tb)
+kable(df)
+```
+
+
+### 5. Identify what is wrong with each of the following inline CSV files. What happens when you run the code?
+
+```{r eval=FALSE}
+read_csv("a,b\n1,2,3\n4,5,6")
+read_csv("a,b,c\n1,2\n1,2,3,4")
+read_csv("a,b\n\"1")
+read_csv("a,b\n1,2\na,b")
+read_csv("a;b\n1;3")
+```
+
+* `read_csv("a,b\n1,2,3\n4,5,6")`
+  
+  Two columns are defined in header, but rows contain 3 columns. The code executes and last column is dropped from the returned tibble.
+
+* `read_csv("a,b,c\n1,2\n1,2,3,4")` 
+  
+  Header specifies 3 columns. The code runs with warnings.
+  
+  row 1 has only 2 columns, 3rd column defaults to NAN
+  
+  row 2 has 4 columns, 4th column is dropped.
+
+* `read_csv("a,b\n\"1", col_names = FALSE)`
+  
+  No header, so 1st line a,b specifies 2 columns to begin with.
+  
+  row 2 has an opening quote char, but does not close it. `read_csv` makes some intelligent decisions and drops the quote. Additionally, there is no second column, so the value defaults to NAN.
+  
+  The code runs with warnings. Data types of both columns will be `chr`.
+
+* `read_csv("a,b\n1,2\na,b")`
+  
+  The input data has repeated the column headers. First line becomes the header, and 3rd line becomes one of the observations. This coerces all columns types into `chr` type.
+  
+  The code runs without any message or warning.
+
+* `read_csv("a,b\n1,2\na,b", col_names = FALSE)`
+  
+  Similar o previous case, the code runs without any warnings. Mixed data types coerces each column to `chr` type.
+
+* `read_csv("a;b\n1;3")`
+  
+  The intended field delimiter is semicolon `;`, which should return 2 columns.
+  
+  Since `read_csv()` only considers comma `,` delimiter, the code returns only 1 column. There will not be any warnings.
+  
+  The code can be fixed by using the general `read_delim()` function with `delim=";"` argument.
+
+* `read_delim("a;b\n1;3", delim = ";", col_names = FALSE)`
+  
+  Since `col_names=FALSE` is specified, the header will become the 1st data point. This will also coerce columns into `chr` type.
+  
+  If a,b is intended to be the column names, then col_names argument should be removed.
+
+
+## 11.3.5 Exercises
+
+### 1. What are the most important arguments to `locale()`?
+
+`date_names, date_format and time_format`.
+
+### 2. What happens if you try and set `decimal_mark` and `grouping_mark` to the same character? What happens to the default value of `grouping_mark` when you set `decimal_mark` to `","`? What happens to the default value of `decimal_mark` when you set the `grouping_mark` to `"."`?
+
+  `decimal_mark` and `grouping_mark` must be different. locale function will raise an error.
+  
+  `,` will be replaced by `.`.
+  
+  `.` will be replaced by `,`.
+
+### 3. I didn't discuss the `date_format` and `time_format` options to `locale()`. What do they do? Construct an example that shows when they might be useful.
+
+They are used to specify the date and time formats. `r parse_date("1 janvier 2015", "%d %B %Y", locale = locale("fr"))`
+
+### 4. If you live outside the US, create a new locale object that encapsulates the settings for the types of file you read most commonly.
+
+`locale(date_format = "%d/%m/%Y", decimal_mark = ".", grouping_mark = ",")`
+
+
+### 5. What's the difference between `read_csv()` and `read_csv2()`?
+
+`read_csv()` uses `,` delimiter and `read_csv2()` uses `;`. `read_csv2()` is useful in European countries where `,` is the decimal point separtor.
+
+### 6. What are the most common encodings used in Europe? What are the most common encodings used in Asia? Do some googling to find out.
+
+ISO 8859-1 is the default encoding in Western Europe
+
+Guobiao and Big-5 are popular encodings for Chinese characters
+
+The EUC are a set of encodings which extend ISO-2022 to include Chinese, Japanese and Korean characters
+
+The ISCII and PASCII define encodings for many Indic (Indian) and Arabic languages
+
+Finally, the Unicode standard, which combines UTF-8, UTF-16, UTF-32, UCS-2 and other encodings, has rendered most encodings obsolete, as it was developed to represent every character or symbol of almost every language uniquely
+
+### 7. Generate the correct format string to parse each of the following dates and times:
+
+```{r}
+d1 <- "January 1, 2010"
+d2 <- "2015-Mar-07"
+d3 <- "06-Jun-2017"
+d4 <- c("August 19 (2015)", "July 1 (2015)")
+d5 <- "12/30/14" # Dec 30, 2014
+t1 <- "1705"
+t2 <- "11:15:10.12 PM"
+```
+
+```{r}
+parse_date(d1, "%B %d, %Y")
+parse_date(d2, "%Y-%b-%y")
+parse_date(d3, "%d-%b-%Y")
+parse_vector(d4, collector = col_date(format="%B %d (%Y)"))
+parse_date(d5, "%m/%d/%y")
+parse_time(t1, "%H%M")
+parse_time(t2,"%H:%M:%OS %p")
+```
+
