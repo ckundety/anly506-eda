@@ -1,0 +1,122 @@
+---
+title: "Week 5 | Tidy Data"
+author: "Chaitanya Kundety"
+date: "June 2, 2019"
+output: html_document
+book: "YaRr! The pirate's guide to R"
+book-url: "https://bookdown.org/ndphillips/YaRrr/test-your-r-might-pirates-and-superheroes.html
+"
+---
+
+## 8.7 Exercise
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(knitr)
+```
+
+### 1. Combine the data into a single dataframe. Complete all the following exercises from the dataframe!
+
+```{r}
+superhero <- data.frame(
+  Name = c("Astrid", "Lea", "Sarina", "Remon", "Letizia", "Babice", "Jonas", "Wendy", "Niveditha", "Gioia"),
+  Sex = c("F", "F", "F", "M", "F", "F", "M", "F", "F", "F"),
+  Age = c(30, 25, 25, 29, 22, 22, 35, 19, 32, 21),
+  Superhero = c("Batman", "Superman", "Batman", "Spiderman", "Batman",
+               "Antman", "Batman", "Superman", "Maggott", "Superman"),
+  Tattoos = c(11, 15, 12, 5, 65, 3, 9, 13, 900, 0)
+)
+
+kable(superhero)
+```
+
+### 2. What is the median age of the 10 pirates?
+
+```{r}
+med_age <- median(superhero$Age)
+```
+
+The median age is `r med_age`.
+
+### 3. What was the mean age of female and male pirates separately?
+
+```{r}
+mean_ages <- superhero %>% group_by(Sex) %>% summarize(mean_age = mean(Age))
+kable(mean_ages)
+```
+
+### 4. What was the most number of tattoos owned by a male pirate?
+
+```{r}
+max_tattoos_m <- superhero %>%
+  filter(Sex == "M") %>%
+  summarize(max(Tattoos))
+```
+
+The highest number of tattoos among males is `r max_tattoos_m`.
+
+### 5. What percent of pirates under the age of 32 were female?
+
+```{r}
+age_lt32_f_pct <- superhero %>%
+  filter(Age < 32) %>%
+  group_by(Sex) %>%
+  summarize(cnt = n()) %>%
+  mutate(pct = cnt / sum(cnt)) %>%
+  filter(Sex == "F") %>%
+  select(pct)
+```
+
+`r age_lt32_f_pct * 100`% of the pirates under age 32 are female.
+
+### 6. What percent of female pirates are under the age of 32?
+
+```{r}
+f_lt32_pct <- superhero %>%
+  filter(Sex == "F") %>%
+  mutate(under32 = Age < 32) %>%
+  group_by(under32) %>%
+  summarise(cnt = n()) %>%
+  mutate(pct = cnt / sum(cnt)) %>%
+  filter(under32 == TRUE) %>%
+  select(pct)
+```
+
+`r f_lt32_pct * 100`% of females are under 32 years of age.
+
+### 7. Add a new column to the dataframe called tattoos.per.year which shows how many tattoos each pirate has for each year in their life.
+
+```{r}
+superhero <- superhero %>% mutate(tattoos.per.year = Tattoos / Age)
+kable(superhero)
+```
+
+### 8. Which pirate had the most number of tattoos per year?
+
+```{r}
+max_tat_yr <- superhero %>%
+  filter(tattoos.per.year == max(tattoos.per.year)) %>%
+  select(Name)
+```
+
+`r max_tat_yr` has the most tattoos per year.
+
+### 9. What are the names of the female pirates whose favorite superhero is Superman?
+
+```{r}
+f_sups <- superhero %>%
+  filter(Sex == "F", Superhero == "Superman") %>%
+  pull(Name)
+```
+
+`r as.character(f_sups)` are famale wih Superman for superhero.
+
+### 10. What was the median number of tattoos of pirates over the age of 20 whose favorite superhero is Spiderman?
+
+```{r}
+age_gt20_spdrmn_med_tat <- superhero %>%
+  filter(Age > 20, Superhero == "Spiderman") %>%
+  summarize(median(Tattoos))
+```
+
+Median number of tattoos of pirates over age 20 and like Spiderman is `r age_gt20_spdrmn_med_tat`.
