@@ -1,0 +1,266 @@
+---
+title: "Gapminder data exploration"
+author: "Krishna Chaitanya Kundety"
+date: "June 16, 2019"
+output:
+  pdf_document:
+    number_sections: true
+    toc: true
+git-repo: "github.com/ckundety/ANLY506-eda"
+---
+
+```{r setup, include=FALSE, message = FALSE}
+library(knitr)
+library(tidyverse)
+
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+# Dataset
+
+The dataset is gapminder. Below is the structure.
+
+```{r}
+gapminder <- read_csv("gapminder.csv")
+str(gapminder)
+```
+
+The dataset contains `r nrow(gapminder)` observations and `r ncol(gapminder)` variables.
+
+```{r}
+data_desc <- gapminder %>% summarise(
+                        num_countries = n_distinct(Country),
+                        num_regions = n_distinct(region),
+                        num_years = n_distinct(Year),
+                        from_year = min(Year),
+                        to_year = max(Year))
+
+num_regions <- data_desc$num_regions
+num_countries <- data_desc$num_countries
+num_years <- data_desc$num_years
+from_year <- data_desc$from_year
+to_year <- data_desc$to_year
+```
+
+The dataset contains life expectancy, income and population of various countries over the past years. Data is provided on `r num_countries` countries, from `r num_regions` regions around the world. The time range spans over `r num_years` years, from `r from_year` to `r to_year`.
+
+
+# Missing records
+
+```{r}
+complete_data_size <- num_countries * num_years
+```
+
+If we assume the dataset to be complete, i.e., each country has `r num_years` observations (one observation for every year), there should be `r complete_data_size` observations. But this is not the case, as we have seen that there are `r nrow(gapminder)` observations. This means there are some missing information.
+
+Let us see the countries for which there are less than `r num_years` years in the records.
+
+```{r}
+countries_lt216 <- gapminder %>%
+  group_by(Country) %>%
+  summarise(years = n_distinct(Year)) %>%
+  filter(years < num_years)
+
+ggplot(countries_lt216) +
+  aes(Country, years) +
+  geom_col() +
+  theme(axis.text.x = element_text(angle = 45)) +
+  ylab("Number of years of data available") +
+  ggtitle(paste("Number of observations for countries with <", num_years, "years of data"))
+```
+
+So `r nrow(countries_lt216)` countries have less than `r num_years` of data. This can be due to several reasons. The data may not have been recorded for some years, or that the country was founded less than `r num_years` years ago.
+
+## Are there data samples with NAN values?
+
+```{r}
+missing_counts <- gapminder %>%
+    gather(key = "key", value = "val") %>%
+    mutate(is.missing = is.na(val)) %>%
+    group_by(key, is.missing) %>%
+    summarise(num.missing = n()) %>%
+    filter(is.missing==T) %>%
+    select(-is.missing) %>%
+    arrange(desc(num.missing))
+
+ggplot(missing_counts) +
+  aes(key, num.missing) +
+  geom_col()
+```
+
+We can see there are many missing values in population column. This may be because the population census is conducted every few years. In this case, the population can be considered the same as the previous years.
+
+Let us assume that the population does not change significantly between two censuses of the country. Then we can backfill the missing population values.
+
+```{r}
+bfill_pop <- gapminder %>% group_by(Country) %>% arrange(Year) %>% fill(population)
+```
+
+
+# Data visualization
+
+## Population growth over time
+
+
+```{r}
+total_region_population <- bfill_pop %>%
+  group_by(region, Year) %>%
+  summarize(population=sum(population))
+  
+ggplot(total_region_population) +
+  aes(Year, population, color=region) +
+  geom_line(size = 2)
+```
+
+East Asis-Pacific has the highest population in all of recorded history. South Asia has had the highest growth in population. Since 1950, South Asia's population growth rate has been equal to that of East Asia-Pacific.
+
+
+## How is the current life expectancy disributed?
+
+```{r}
+gapminder %>%
+  filter(Year == to_year) %>%
+  ggplot() +
+  aes(life) +
+  geom_density() +
+  ggtitle(paste("Distribution of global life expectancy for the year", to_year))
+  
+```
+
+Most countries in the world have a life expectancy of around 75.
+
+```{r}
+gapminder %>%
+  filter(Year == to_year) %>%
+  arrange(region, Country, life) %>%
+  ggplot() +
+  aes(life, color=region, fill=region) +
+  geom_density(alpha=0.2) +
+  ggtitle(paste("Distribution of life expectancy by region for the year", to_year))
+```
+
+* The American subcontinent has the greatest spread of life expectancy.
+* Middle East & North Africa region has the highest mean life expectancy
+* Sub-Saharan Africa has the lowest mean life expectancy
+
+## How is the current world population distributed?
+
+```{r}
+gapminder %>%
+  filter(Year == to_year) %>%
+  ggplot() +
+  aes(Year, income) +
+  geom_boxplot() +
+  ggtitle(paste("Distribution of global GDP per capita for the year", to_year))
+  
+```
+
+GDP per capita is skewed and has many outliers.
+
+```{r}
+gapminder %>%
+  filter(Year == to_year) %>%
+  ggplot() +
+  aes(income, color=region, fill=region) +
+  geom_density(alpha=0.2) +
+  ggtitle(paste("Distribution of GDP per capita by region for the year", to_year))
+```
+
+Except for The Americas and Europe & Central Asia, we see vvery similar characteristics. 
+
+
+## Is there a relationship between life expectancy and oher variables?
+
+```{r}
+ggplot(gapminder) +
+  aes(Year, life, by = region) +
+  geom_point() +
+  facet_wrap(. ~ region, ncol = 2)
+```
+
+The life expecancy has drastically increased in all regions since 1950.
+
+### Has income affected the life expectancy?
+
+```{r}
+ggplot(gapminder) +
+  aes(income, life) +
+  geom_point() +
+  ggtitle("Life expectancy vs. income")
+```
+
+In all the cases, The highest life expectancies are found in high GDP per capita countries. The relationship is non-linear, increase in life expectancy dampening around 80 years.
+
+```{r}
+ggplot(gapminder) +
+  aes(income, life, by = region) +
+  geom_point() +
+  facet_wrap(. ~ region, ncol = 2)
+```
+
+We can compare life expectancy vs. GDP per capita in each region. We see the same non-linear relationship in all regions.
+South Asia and Sub-Saharan Africa have achieved some high life expectancy without he need for very high GDP per capita.
+It is evident from this plot that the op echelon of GDP per capita are all in Middle East & North Africa region.
+In the East Asia & Pacific region, one or more countries have a lower life expectancy despite having above average GDP per capita.
+
+Let us zoom into East Asia & Pacific region to find out which country has lower life expectancy.
+
+```{r}
+gapminder %>%
+  filter(region=="East Asia & Pacific") %>%
+  ggplot() +
+  aes(income, life, by=Country) +
+  geom_point() +
+  facet_wrap(. ~ Country)
+```
+
+Brunei has comparatively lower life expectancy growth with GDP per capita compared to other countries.
+
+
+# Kmeans clustering
+
+## Can we predict region (using kmeans) if year, population, income and life are given?
+
+**Another way to frame the same question is:**
+
+**If the input variables are year, population, income and life, number of centers = 6, can kmeans accurately cluster the data into regions?**
+
+For this, We can perform some preliminary visualizations to see if there is any significant distinction between regions' data points.
+
+First, let us see the distribution of each variable grouped by region. We have seen this in earlier section, but it was only for `r to_year`. This time we need to see the same plot for all years.
+
+```{r}
+ggplot(bfill_pop) + aes(population, color=region, fill=region) + geom_density(alpha=0.2) +
+  ggtitle("population distribution by region")
+ggplot(bfill_pop) + aes(income, color=region, fill=region) + geom_density(alpha=0.2) +
+  ggtitle("income distribution by region")
+ggplot(bfill_pop) + aes(life, color=region, fill=region) + geom_density(alpha=0.2) +
+  ggtitle("life distribution by region")
+```
+
+We can see from above 3 plots that there is no difference in the distribution between regions. This means that clustering the variables will not give any meaningful results.
+
+It is, however, possible that the combined will produce meaningful clusters. Below, 3 scatter plots are shown, one for each pair combination of the numeric variables.
+
+```{r}
+ggplot(bfill_pop) + aes(life, population, shape=region) + geom_point() +
+  ggtitle("life vs. population plot by region")
+ggplot(bfill_pop) + aes(life, income, shape=region) + geom_point() +
+  ggtitle("life vs. income plot by region")
+ggplot(bfill_pop) + aes(population, income, shape=region) + geom_point() +
+  ggtitle("population vs. income plot by region")
+```
+
+We see that no clear distinction between regions in the 2D space.
+
+It can be We argued that we have disregarded the year variable. For this analysis, Year is better treated as as a categorical variable with `r num_years` levels instead time or continuous variable. But let us look at bivariate plots with year on x axis anyway.
+
+```{r}
+ggplot(bfill_pop) + aes(Year, income, shape=region) + geom_point()
+ggplot(bfill_pop) + aes(Year, life, shape=region) + geom_point()
+ggplot(bfill_pop) + aes(Year, income, shape=region) + geom_point()
+```
+
+Once again, there is no spatial distinction for kmeans (or any distance based algorithm) to give meaningful results.
+
+In conclusion, we should not use kmeans to cluster the data into regions.
